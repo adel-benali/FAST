@@ -1,0 +1,596 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Line Follower Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <header class="header">
+            <h1>🤖 Z&F</h1>
+            <div class="connection-controls">
+                <button id="connectBtn" class="btn btn-primary">
+                    <span class="btn-icon">🔌</span>
+                    Connect BLE
+                </button>
+                <div class="status-badge" id="statusBadge">
+                    <span class="status-dot"></span>
+                    Disconnected
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Grid -->
+        <div class="dashboard-grid">
+            
+            <!-- QTR Sensors Card -->
+            <div class="card qtr-card">
+                <div class="card-header">
+                    <h2>QTR Sensors</h2>
+                    <span class="card-badge">8 Channels</span>
+                </div>
+                <div class="card-body">
+                    <div class="sensors-container" id="sensorsContainer">
+                        <!-- Sensors will be dynamically created -->
+                    </div>
+                    <div class="sensor-values" id="sensorValues">
+                        <!-- Raw values will be displayed here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PID Control Card -->
+            <div class="card pid-card">
+                <div class="card-header">
+                    <h2>PID Controller</h2>
+                    <span class="card-badge">Tuning</span>
+                </div>
+                <div class="card-body">
+                    <!-- Kp Slider -->
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <label>Kp (Proportional)</label>
+                            <input type="number" id="kpInput" class="slider-input" 
+                                   min="0" max="2" step="0.01" value="0.15">
+                        </div>
+                        <input type="range" id="kpSlider" class="slider" 
+                               min="0" max="2" step="0.01" value="0.15">
+                        <div class="slider-marks">
+                            <span>0.0</span>
+                            <span>1.0</span>
+                            <span>2.0</span>
+                        </div>
+                    </div>
+
+                    <!-- Kd Slider -->
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <label>Kd (Derivative)</label>
+                            <input type="number" id="kdInput" class="slider-input" 
+                                   min="0" max="5" step="0.01" value="0.80">
+                        </div>
+                        <input type="range" id="kdSlider" class="slider" 
+                               min="0" max="5" step="0.01" value="0.80">
+                        <div class="slider-marks">
+                            <span>0.0</span>
+                            <span>2.5</span>
+                            <span>5.0</span>
+                        </div>
+                    </div>
+
+                    <!-- Base Speed Slider -->
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <label>Base Speed</label>
+                            <input type="number" id="baseInput" class="slider-input" 
+                                   min="0" max="255" step="1" value="100">
+                        </div>
+                        <input type="range" id="baseSlider" class="slider" 
+                               min="0" max="255" step="1" value="100">
+                        <div class="slider-marks">
+                            <span>0</span>
+                            <span>128</span>
+                            <span>255</span>
+                        </div>
+                    </div>
+
+                    <!-- Save Settings Button -->
+                    <button id="saveBtn" class="btn btn-save">
+                        <span class="btn-icon">💾</span>
+                        Save Settings to ESP32
+                    </button>
+                </div>
+            </div>
+
+            <!-- System Status Card -->
+            <div class="card status-card">
+                <div class="card-header">
+                    <h2>System Status</h2>
+                </div>
+                <div class="card-body">
+                    <!-- Battery Level -->
+                    <div class="status-item">
+                        <div class="status-label">
+                            <span class="status-icon" id="batteryIcon">🔋</span>
+                            Battery Level
+                        </div>
+                        <div class="battery-container">
+                            <div class="battery-bar" id="batteryBar"></div>
+                            <span class="battery-text" id="batteryText">---%</span>
+                        </div>
+                    </div>
+
+                    <!-- Motor Speeds -->
+                    <div class="status-item">
+                        <div class="status-label">
+                            <span class="status-icon">⚙️</span>
+                            Motor Speeds
+                        </div>
+                        <div class="motors-container">
+                            <div class="motor-item">
+                                <span class="motor-label">Left</span>
+                                <div class="motor-bar-container">
+                                    <div class="motor-bar" id="leftMotorBar"></div>
+                                </div>
+                                <span class="motor-value" id="leftMotorValue">0</span>
+                            </div>
+                            <div class="motor-item">
+                                <span class="motor-label">Right</span>
+                                <div class="motor-bar-container">
+                                    <div class="motor-bar" id="rightMotorBar"></div>
+                                </div>
+                                <span class="motor-value" id="rightMotorValue">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+ 
+        <!-- Footer -->
+        <footer class="footer">
+            <p>ESP32-S3 Line Follower Robot | Web Bluetooth Dashboard</p>
+                      <!-- TEAM ATTRIBUTION ADDED -->
+<div class="team-credit">
+    <span class="team-label">Developed by:</span>
+    <span class="team-names">Ben Ali Adel · Bechim Abdraouf · Beldjoud Oubaid Ellah</span>
+</div>
+        </footer>
+ 
+
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // ==================== GLOBAL VARIABLES ====================
+        let bluetoothDevice = null;
+        let characteristic = null;
+        let writeCharacteristic = null;
+
+        // BLE Service and Characteristic UUIDs (UPDATE THESE TO MATCH YOUR ESP32)
+        const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+        const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+        const WRITE_CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a9';
+
+        // ==================== DOM ELEMENTS ====================
+        const connectBtn = document.getElementById('connectBtn');
+        const statusBadge = document.getElementById('statusBadge');
+        const sensorsContainer = document.getElementById('sensorsContainer');
+        const sensorValues = document.getElementById('sensorValues');
+        
+        const kpSlider = document.getElementById('kpSlider');
+        const kdSlider = document.getElementById('kdSlider');
+        const baseSlider = document.getElementById('baseSlider');
+        const kpInput = document.getElementById('kpInput');
+        const kdInput = document.getElementById('kdInput');
+        const baseInput = document.getElementById('baseInput');
+
+        const batteryBar = document.getElementById('batteryBar');
+        const batteryText = document.getElementById('batteryText');
+        const batteryIcon = document.getElementById('batteryIcon');
+        
+        const leftMotorBar = document.getElementById('leftMotorBar');
+        const rightMotorBar = document.getElementById('rightMotorBar');
+        const leftMotorValue = document.getElementById('leftMotorValue');
+        const rightMotorValue = document.getElementById('rightMotorValue');
+
+        // ==================== INITIALIZATION ====================
+        // Create 8 QTR sensors on page load
+        function initSensors() {
+            for (let i = 0; i < 8; i++) {
+                const sensor = document.createElement('div');
+                sensor.className = 'sensor';
+                sensor.id = `sensor${i}`;
+                sensor.innerHTML = `<span class="sensor-label">${i + 1}</span>`;
+                sensorsContainer.appendChild(sensor);
+
+                const value = document.createElement('div');
+                value.className = 'sensor-value-item';
+                value.id = `sensorVal${i}`;
+                value.innerHTML = `<span class="value-label">S${i + 1}:</span><span class="value-number">0</span>`;
+                sensorValues.appendChild(value);
+            }
+        }
+
+        // ==================== BLE CONNECTION ====================
+        async function connectBLE() {
+            try {
+                console.log('Requesting Bluetooth Device...');
+                
+                // Request BLE device
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: [SERVICE_UUID] }],
+                    optionalServices: [SERVICE_UUID]
+                });
+
+                console.log('Connecting to GATT Server...');
+                const server = await bluetoothDevice.gatt.connect();
+
+                console.log('Getting Service...');
+                const service = await server.getPrimaryService(SERVICE_UUID);
+
+                console.log('Getting Characteristics...');
+                characteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+                
+                // Try to get write characteristic (optional)
+                try {
+                    writeCharacteristic = await service.getCharacteristic(WRITE_CHARACTERISTIC_UUID);
+                    console.log('Write characteristic found');
+                } catch (e) {
+                    console.log('Write characteristic not available');
+                }
+
+                // Start notifications
+                await characteristic.startNotifications();
+                characteristic.addEventListener('characteristicvaluechanged', handleNotification);
+
+                // Update UI
+                updateConnectionStatus(true);
+                console.log('Connected successfully!');
+
+                // Handle disconnection
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+            } catch (error) {
+                console.error('BLE Connection Error:', error);
+                alert('Failed to connect: ' + error.message);
+                updateConnectionStatus(false);
+            }
+        }
+
+        function onDisconnected() {
+            console.log('Device disconnected');
+            updateConnectionStatus(false);
+            bluetoothDevice = null;
+            characteristic = null;
+            writeCharacteristic = null;
+        }
+
+        function updateConnectionStatus(connected) {
+            if (connected) {
+                statusBadge.classList.add('connected');
+                statusBadge.innerHTML = '<span class="status-dot"></span>Connected';
+                connectBtn.innerHTML = '<span class="btn-icon">✓</span>Connected';
+                connectBtn.classList.add('connected');
+                connectBtn.disabled = true;
+            } else {
+                statusBadge.classList.remove('connected');
+                statusBadge.innerHTML = '<span class="status-dot"></span>Disconnected';
+                connectBtn.innerHTML = '<span class="btn-icon">🔌</span>Connect BLE';
+                connectBtn.classList.remove('connected');
+                connectBtn.disabled = false;
+            }
+        }
+
+        // ==================== HANDLE INCOMING DATA ====================
+        function handleNotification(event) {
+            const value = event.target.value;
+            const decoder = new TextDecoder('utf-8');
+            const jsonString = decoder.decode(value);
+
+            try {
+                const data = JSON.parse(jsonString);
+                console.log('Received data:', data);
+                updateDashboard(data);
+            } catch (error) {
+                console.error('JSON Parse Error:', error);
+            }
+        }
+
+        function updateDashboard(data) {
+            // Update QTR sensors
+            if (data.qtr && Array.isArray(data.qtr)) {
+                data.qtr.forEach((state, i) => {
+                    const sensor = document.getElementById(`sensor${i}`);
+                    if (sensor) {
+                        if (state === 1) {
+                            sensor.classList.add('active');
+                        } else {
+                            sensor.classList.remove('active');
+                        }
+                    }
+                });
+            }
+
+            // Update raw sensor values
+            if (data.raw && Array.isArray(data.raw)) {
+                data.raw.forEach((val, i) => {
+                    const valueElem = document.getElementById(`sensorVal${i}`);
+                    if (valueElem) {
+                        const numberSpan = valueElem.querySelector('.value-number');
+                        numberSpan.textContent = val;
+                    }
+                });
+            }
+
+            // Update PID values (only if not currently being adjusted by user)
+            if (data.kp !== undefined && !kpSlider.matches(':active') && document.activeElement !== kpInput) {
+                kpSlider.value = data.kp;
+                kpInput.value = data.kp.toFixed(2);
+            }
+            if (data.kd !== undefined && !kdSlider.matches(':active') && document.activeElement !== kdInput) {
+                kdSlider.value = data.kd;
+                kdInput.value = data.kd.toFixed(2);
+            }
+            if (data.base !== undefined && !baseSlider.matches(':active') && document.activeElement !== baseInput) {
+                baseSlider.value = data.base;
+                baseInput.value = data.base;
+            }
+
+            // Update battery
+            if (data.battery !== undefined) {
+                updateBattery(data.battery);
+            }
+
+            // Update motors
+            if (data.left !== undefined) {
+                updateMotor('left', data.left);
+            }
+            if (data.right !== undefined) {
+                updateMotor('right', data.right);
+            }
+        }
+
+        // ==================== UI UPDATE FUNCTIONS ====================
+        function updateBattery(level) {
+            batteryBar.style.width = level + '%';
+            batteryText.textContent = level + '%';
+
+            // Update color based on level
+            if (level > 50) {
+                batteryBar.style.backgroundColor = '#10b981';
+                batteryIcon.textContent = '🔋';
+            } else if (level > 20) {
+                batteryBar.style.backgroundColor = '#f59e0b';
+                batteryIcon.textContent = '🔋';
+            } else {
+                batteryBar.style.backgroundColor = '#ef4444';
+                batteryIcon.textContent = '🪫';
+                // Show warning animation
+                batteryBar.classList.add('low-battery');
+            }
+        }
+
+        function updateMotor(side, speed) {
+            const percentage = (Math.abs(speed) / 255) * 100;
+            
+            if (side === 'left') {
+                leftMotorBar.style.width = percentage + '%';
+                leftMotorValue.textContent = speed;
+                
+                // Color based on speed
+                if (speed > 0) {
+                    leftMotorBar.style.backgroundColor = '#3b82f6';
+                } else if (speed < 0) {
+                    leftMotorBar.style.backgroundColor = '#ef4444';
+                } else {
+                    leftMotorBar.style.backgroundColor = '#6b7280';
+                }
+            } else {
+                rightMotorBar.style.width = percentage + '%';
+                rightMotorValue.textContent = speed;
+                
+                if (speed > 0) {
+                    rightMotorBar.style.backgroundColor = '#3b82f6';
+                } else if (speed < 0) {
+                    rightMotorBar.style.backgroundColor = '#ef4444';
+                } else {
+                    rightMotorBar.style.backgroundColor = '#6b7280';
+                }
+            }
+        }
+
+        // ==================== SEND DATA TO ESP32 ====================
+        async function sendPIDUpdate(param, value) {
+            if (!writeCharacteristic) {
+                console.log('Write characteristic not available');
+                return;
+            }
+
+            try {
+                const data = { [param]: value };
+                const jsonString = JSON.stringify(data);
+                const encoder = new TextEncoder();
+                const encodedData = encoder.encode(jsonString);
+
+                await writeCharacteristic.writeValue(encodedData);
+                console.log('Sent:', jsonString);
+            } catch (error) {
+                console.error('Error sending data:', error);
+            }
+        }
+
+        // ==================== SAVE SETTINGS TO ESP32 ====================
+        async function saveSettings() {
+            if (!writeCharacteristic) {
+                alert('Not connected to ESP32. Please connect first.');
+                return;
+            }
+
+            try {
+                const saveBtn = document.getElementById('saveBtn');
+                
+                // Disable button and show saving state
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="btn-icon">⏳</span>Saving...';
+                
+                // Send save command to ESP32
+                const data = { save: 1 };
+                const jsonString = JSON.stringify(data);
+                const encoder = new TextEncoder();
+                const encodedData = encoder.encode(jsonString);
+
+                await writeCharacteristic.writeValue(encodedData);
+                console.log('Save command sent:', jsonString);
+
+                // Show success state
+                saveBtn.innerHTML = '<span class="btn-icon">✓</span>Saved!';
+                saveBtn.classList.add('btn-success');
+
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<span class="btn-icon">💾</span>Save Settings to ESP32';
+                    saveBtn.classList.remove('btn-success');
+                }, 2000);
+
+            } catch (error) {
+                console.error('Error saving settings:', error);
+                alert('Failed to save settings: ' + error.message);
+                
+                // Reset button on error
+                const saveBtn = document.getElementById('saveBtn');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<span class="btn-icon">💾</span>Save Settings to ESP32';
+            }
+        }
+
+        // ==================== SLIDER EVENTS ====================
+        // Kp Slider
+        kpSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            kpInput.value = value.toFixed(2);
+        });
+
+        kpSlider.addEventListener('change', (e) => {
+            const value = parseFloat(e.target.value);
+            sendPIDUpdate('kp', value);
+        });
+
+        // Kp Input
+        kpInput.addEventListener('input', (e) => {
+            let value = parseFloat(e.target.value);
+            if (isNaN(value)) return;
+            
+            // Clamp value to min/max
+            value = Math.max(0, Math.min(2, value));
+            kpSlider.value = value;
+        });
+
+        kpInput.addEventListener('change', (e) => {
+            let value = parseFloat(e.target.value);
+            if (isNaN(value)) {
+                value = 0;
+            }
+            
+            // Clamp value to min/max
+            value = Math.max(0, Math.min(2, value));
+            e.target.value = value.toFixed(2);
+            kpSlider.value = value;
+            sendPIDUpdate('kp', value);
+        });
+
+        // Kd Slider
+        kdSlider.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            kdInput.value = value.toFixed(2);
+        });
+
+        kdSlider.addEventListener('change', (e) => {
+            const value = parseFloat(e.target.value);
+            sendPIDUpdate('kd', value);
+        });
+
+        // Kd Input
+        kdInput.addEventListener('input', (e) => {
+            let value = parseFloat(e.target.value);
+            if (isNaN(value)) return;
+            
+            // Clamp value to min/max
+            value = Math.max(0, Math.min(5, value));
+            kdSlider.value = value;
+        });
+
+        kdInput.addEventListener('change', (e) => {
+            let value = parseFloat(e.target.value);
+            if (isNaN(value)) {
+                value = 0;
+            }
+            
+            // Clamp value to min/max
+            value = Math.max(0, Math.min(5, value));
+            e.target.value = value.toFixed(2);
+            kdSlider.value = value;
+            sendPIDUpdate('kd', value);
+        });
+
+        // Base Speed Slider
+        baseSlider.addEventListener('input', (e) => {
+            const value = parseInt(e.target.value);
+            baseInput.value = value;
+        });
+
+        baseSlider.addEventListener('change', (e) => {
+            const value = parseInt(e.target.value);
+            sendPIDUpdate('base', value);
+        });
+
+        // Base Speed Input
+        baseInput.addEventListener('input', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value)) return;
+            
+            // Clamp value to min/max
+            value = Math.max(0, Math.min(255, value));
+            baseSlider.value = value;
+        });
+
+        baseInput.addEventListener('change', (e) => {
+            let value = parseInt(e.target.value);
+            if (isNaN(value)) {
+                value = 0;
+            }
+            
+            // Clamp value to min/max
+            value = Math.max(0, Math.min(255, value));
+            e.target.value = value;
+            baseSlider.value = value;
+            sendPIDUpdate('base', value);
+        });
+
+        // ==================== EVENT LISTENERS ====================
+        connectBtn.addEventListener('click', connectBLE);
+        
+        // Save Settings Button
+        document.getElementById('saveBtn').addEventListener('click', saveSettings);
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            initSensors();
+            kpInput.value = parseFloat(kpSlider.value).toFixed(2);
+            kdInput.value = parseFloat(kdSlider.value).toFixed(2);
+            baseInput.value = baseSlider.value;
+        });
+
+        // Check for Web Bluetooth support
+        if (!navigator.bluetooth) {
+            alert('Web Bluetooth API is not available in this browser. Please use Chrome, Edge, or Opera on desktop, or Chrome on Android.');
+            connectBtn.disabled = true;
+        }
+    </script>
+</body>
+</html>
