@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -53,8 +53,12 @@
                     <div class="slider-group">
                         <div class="slider-header">
                             <label>Kp (Proportional)</label>
-                            <input type="number" id="kpInput" class="slider-input" 
-                                   min="0" max="2" step="0.01" value="0.15">
+                            <!-- NEW: Increment/Decrement buttons for Kp -->
+                            <div class="increment-controls">
+                                <button class="increment-btn" id="kpDecrement" title="Decrease Kp by 0.01">▼</button>
+                                <span class="slider-value" id="kpValue">0.00</span>
+                                <button class="increment-btn" id="kpIncrement" title="Increase Kp by 0.01">▲</button>
+                            </div>
                         </div>
                         <input type="range" id="kpSlider" class="slider" 
                                min="0" max="2" step="0.01" value="0.15">
@@ -69,8 +73,12 @@
                     <div class="slider-group">
                         <div class="slider-header">
                             <label>Kd (Derivative)</label>
-                            <input type="number" id="kdInput" class="slider-input" 
-                                   min="0" max="5" step="0.01" value="0.80">
+                            <!-- NEW: Increment/Decrement buttons for Kd -->
+                            <div class="increment-controls">
+                                <button class="increment-btn" id="kdDecrement" title="Decrease Kd by 0.05">▼</button>
+                                <span class="slider-value" id="kdValue">0.00</span>
+                                <button class="increment-btn" id="kdIncrement" title="Increase Kd by 0.05">▲</button>
+                            </div>
                         </div>
                         <input type="range" id="kdSlider" class="slider" 
                                min="0" max="5" step="0.01" value="0.80">
@@ -85,8 +93,12 @@
                     <div class="slider-group">
                         <div class="slider-header">
                             <label>Base Speed</label>
-                            <input type="number" id="baseInput" class="slider-input" 
-                                   min="0" max="255" step="1" value="100">
+                            <!-- NEW: Increment/Decrement buttons for Speed -->
+                            <div class="increment-controls">
+                                <button class="increment-btn" id="baseDecrement" title="Decrease Speed by 5">▼</button>
+                                <span class="slider-value" id="baseValue">0</span>
+                                <button class="increment-btn" id="baseIncrement" title="Increase Speed by 5">▲</button>
+                            </div>
                         </div>
                         <input type="range" id="baseSlider" class="slider" 
                                min="0" max="255" step="1" value="100">
@@ -94,6 +106,28 @@
                             <span>0</span>
                             <span>128</span>
                             <span>255</span>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Speed Mode Buttons -->
+                    <div class="speed-modes">
+                        <div class="modes-label">Quick Speed Modes:</div>
+                        <div class="modes-buttons">
+                            <button class="mode-btn" id="modeFast" data-speed="130">
+                                <span class="mode-icon">⚡</span>
+                                <span class="mode-name">Fast</span>
+                                <span class="mode-speed">130</span>
+                            </button>
+                            <button class="mode-btn active" id="modeNormal" data-speed="90">
+                                <span class="mode-icon">🚀</span>
+                                <span class="mode-name">Normal</span>
+                                <span class="mode-speed">90</span>
+                            </button>
+                            <button class="mode-btn" id="modeHeavy" data-speed="60">
+                                <span class="mode-icon">🐢</span>
+                                <span class="mode-name">Heavy</span>
+                                <span class="mode-speed">60</span>
+                            </button>
                         </div>
                     </div>
 
@@ -150,18 +184,11 @@
             </div>
 
         </div>
- 
+
         <!-- Footer -->
         <footer class="footer">
             <p>ESP32-S3 Line Follower Robot | Web Bluetooth Dashboard</p>
-                      <!-- TEAM ATTRIBUTION ADDED -->
-<div class="team-credit">
-    <span class="team-label">Developed by:</span>
-    <span class="team-names">Ben Ali Adel · Bechim Abdraouf · Beldjoud Oubaid Ellah</span>
-</div>
         </footer>
- 
-
     </div>
 
     <!-- JavaScript -->
@@ -185,9 +212,9 @@
         const kpSlider = document.getElementById('kpSlider');
         const kdSlider = document.getElementById('kdSlider');
         const baseSlider = document.getElementById('baseSlider');
-        const kpInput = document.getElementById('kpInput');
-        const kdInput = document.getElementById('kdInput');
-        const baseInput = document.getElementById('baseInput');
+        const kpValue = document.getElementById('kpValue');
+        const kdValue = document.getElementById('kdValue');
+        const baseValue = document.getElementById('baseValue');
 
         const batteryBar = document.getElementById('batteryBar');
         const batteryText = document.getElementById('batteryText');
@@ -328,17 +355,17 @@
             }
 
             // Update PID values (only if not currently being adjusted by user)
-            if (data.kp !== undefined && !kpSlider.matches(':active') && document.activeElement !== kpInput) {
+            if (data.kp !== undefined && !kpSlider.matches(':active')) {
                 kpSlider.value = data.kp;
-                kpInput.value = data.kp.toFixed(2);
+                kpValue.textContent = data.kp.toFixed(2);
             }
-            if (data.kd !== undefined && !kdSlider.matches(':active') && document.activeElement !== kdInput) {
+            if (data.kd !== undefined && !kdSlider.matches(':active')) {
                 kdSlider.value = data.kd;
-                kdInput.value = data.kd.toFixed(2);
+                kdValue.textContent = data.kd.toFixed(2);
             }
-            if (data.base !== undefined && !baseSlider.matches(':active') && document.activeElement !== baseInput) {
+            if (data.base !== undefined && !baseSlider.matches(':active')) {
                 baseSlider.value = data.base;
-                baseInput.value = data.base;
+                baseValue.textContent = data.base;
             }
 
             // Update battery
@@ -469,11 +496,83 @@
             }
         }
 
+        // ==================== NEW: INCREMENT/DECREMENT FUNCTIONS ====================
+        function incrementKp() {
+            let value = parseFloat(kpSlider.value);
+            value = Math.min(2, value + 0.01); // Max 2
+            kpSlider.value = value;
+            kpValue.textContent = value.toFixed(2);
+            sendPIDUpdate('kp', value);
+        }
+
+        function decrementKp() {
+            let value = parseFloat(kpSlider.value);
+            value = Math.max(0, value - 0.01); // Min 0
+            kpSlider.value = value;
+            kpValue.textContent = value.toFixed(2);
+            sendPIDUpdate('kp', value);
+        }
+
+        function incrementKd() {
+            let value = parseFloat(kdSlider.value);
+            value = Math.min(5, value + 0.05); // Max 5
+            kdSlider.value = value;
+            kdValue.textContent = value.toFixed(2);
+            sendPIDUpdate('kd', value);
+        }
+
+        function decrementKd() {
+            let value = parseFloat(kdSlider.value);
+            value = Math.max(0, value - 0.05); // Min 0
+            kdSlider.value = value;
+            kdValue.textContent = value.toFixed(2);
+            sendPIDUpdate('kd', value);
+        }
+
+        function incrementBase() {
+            let value = parseInt(baseSlider.value);
+            value = Math.min(255, value + 5); // Max 255
+            baseSlider.value = value;
+            baseValue.textContent = value;
+            sendPIDUpdate('base', value);
+        }
+
+        function decrementBase() {
+            let value = parseInt(baseSlider.value);
+            value = Math.max(0, value - 5); // Min 0
+            baseSlider.value = value;
+            baseValue.textContent = value;
+            sendPIDUpdate('base', value);
+        }
+
+        // ==================== NEW: SPEED MODE FUNCTIONS ====================
+        function setSpeedMode(speed) {
+            // Update slider and value display
+            baseSlider.value = speed;
+            baseValue.textContent = speed;
+            
+            // Update active button
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Set active based on speed
+            if (speed === 130) {
+                document.getElementById('modeFast').classList.add('active');
+            } else if (speed === 90) {
+                document.getElementById('modeNormal').classList.add('active');
+            } else if (speed === 60) {
+                document.getElementById('modeHeavy').classList.add('active');
+            }
+            
+            // Send to ESP32 (only base speed, NOT Kp or Kd)
+            sendPIDUpdate('base', speed);
+        }
+
         // ==================== SLIDER EVENTS ====================
-        // Kp Slider
         kpSlider.addEventListener('input', (e) => {
             const value = parseFloat(e.target.value);
-            kpInput.value = value.toFixed(2);
+            kpValue.textContent = value.toFixed(2);
         });
 
         kpSlider.addEventListener('change', (e) => {
@@ -481,33 +580,9 @@
             sendPIDUpdate('kp', value);
         });
 
-        // Kp Input
-        kpInput.addEventListener('input', (e) => {
-            let value = parseFloat(e.target.value);
-            if (isNaN(value)) return;
-            
-            // Clamp value to min/max
-            value = Math.max(0, Math.min(2, value));
-            kpSlider.value = value;
-        });
-
-        kpInput.addEventListener('change', (e) => {
-            let value = parseFloat(e.target.value);
-            if (isNaN(value)) {
-                value = 0;
-            }
-            
-            // Clamp value to min/max
-            value = Math.max(0, Math.min(2, value));
-            e.target.value = value.toFixed(2);
-            kpSlider.value = value;
-            sendPIDUpdate('kp', value);
-        });
-
-        // Kd Slider
         kdSlider.addEventListener('input', (e) => {
             const value = parseFloat(e.target.value);
-            kdInput.value = value.toFixed(2);
+            kdValue.textContent = value.toFixed(2);
         });
 
         kdSlider.addEventListener('change', (e) => {
@@ -515,60 +590,13 @@
             sendPIDUpdate('kd', value);
         });
 
-        // Kd Input
-        kdInput.addEventListener('input', (e) => {
-            let value = parseFloat(e.target.value);
-            if (isNaN(value)) return;
-            
-            // Clamp value to min/max
-            value = Math.max(0, Math.min(5, value));
-            kdSlider.value = value;
-        });
-
-        kdInput.addEventListener('change', (e) => {
-            let value = parseFloat(e.target.value);
-            if (isNaN(value)) {
-                value = 0;
-            }
-            
-            // Clamp value to min/max
-            value = Math.max(0, Math.min(5, value));
-            e.target.value = value.toFixed(2);
-            kdSlider.value = value;
-            sendPIDUpdate('kd', value);
-        });
-
-        // Base Speed Slider
         baseSlider.addEventListener('input', (e) => {
             const value = parseInt(e.target.value);
-            baseInput.value = value;
+            baseValue.textContent = value;
         });
 
         baseSlider.addEventListener('change', (e) => {
             const value = parseInt(e.target.value);
-            sendPIDUpdate('base', value);
-        });
-
-        // Base Speed Input
-        baseInput.addEventListener('input', (e) => {
-            let value = parseInt(e.target.value);
-            if (isNaN(value)) return;
-            
-            // Clamp value to min/max
-            value = Math.max(0, Math.min(255, value));
-            baseSlider.value = value;
-        });
-
-        baseInput.addEventListener('change', (e) => {
-            let value = parseInt(e.target.value);
-            if (isNaN(value)) {
-                value = 0;
-            }
-            
-            // Clamp value to min/max
-            value = Math.max(0, Math.min(255, value));
-            e.target.value = value;
-            baseSlider.value = value;
             sendPIDUpdate('base', value);
         });
 
@@ -578,12 +606,25 @@
         // Save Settings Button
         document.getElementById('saveBtn').addEventListener('click', saveSettings);
 
+        // NEW: INCREMENT/DECREMENT BUTTON EVENTS
+        document.getElementById('kpIncrement').addEventListener('click', incrementKp);
+        document.getElementById('kpDecrement').addEventListener('click', decrementKp);
+        document.getElementById('kdIncrement').addEventListener('click', incrementKd);
+        document.getElementById('kdDecrement').addEventListener('click', decrementKd);
+        document.getElementById('baseIncrement').addEventListener('click', incrementBase);
+        document.getElementById('baseDecrement').addEventListener('click', decrementBase);
+
+        // NEW: SPEED MODE BUTTON EVENTS
+        document.getElementById('modeFast').addEventListener('click', () => setSpeedMode(130));
+        document.getElementById('modeNormal').addEventListener('click', () => setSpeedMode(90));
+        document.getElementById('modeHeavy').addEventListener('click', () => setSpeedMode(60));
+
         // Initialize on page load
         window.addEventListener('DOMContentLoaded', () => {
             initSensors();
-            kpInput.value = parseFloat(kpSlider.value).toFixed(2);
-            kdInput.value = parseFloat(kdSlider.value).toFixed(2);
-            baseInput.value = baseSlider.value;
+            kpValue.textContent = kpSlider.value;
+            kdValue.textContent = kdSlider.value;
+            baseValue.textContent = baseSlider.value;
         });
 
         // Check for Web Bluetooth support
